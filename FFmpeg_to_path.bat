@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ======================================================
-echo        Add FFmpeg to System PATH (All Users).
+echo        Add FFmpeg to System PATH (All Users)
 echo ======================================================
 echo.
 
