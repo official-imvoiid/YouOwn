@@ -1,9 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
 
-echo ======================================================
+echo ========================================================
 echo       Secure Media Downloader - Dependencies Installer
-echo ======================================================
+echo ========================================================
 echo.
 
 :: Check if Python is installed
