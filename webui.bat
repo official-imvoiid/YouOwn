@@ -31,4 +31,3 @@ echo.
 echo Press Ctrl+C to stop the server when you're done.
 
 :: Keep the window open
-cmd /k
