@@ -148,6 +148,9 @@ def download_stream(
             yield f"❌ Failed to process cookies: {e}", 0.0
             clean_temp_files(uid)
             return
+    elif use_cookies and not cookies_txt:
+        yield "❌ Cookie data required but not provided", 0.0
+        return
     
     # Add extra arguments if provided
     if extra_args and extra_args.strip():
@@ -190,12 +193,13 @@ def download_stream(
     # Wait for process to complete
     return_code = proc.wait()
     
-    # Clean up temporary files
+    # Clean up temporary files and report completion
     if cookie_path:
         clean_temp_files(uid)
         yield f"{output}\n✅ Download completed. Cookies securely deleted.\n", 1.0
     else:
-        yield f"{output}\n❌ Unable Download Please Add Cookies in NetScape Format.\n", 1.0
+        # Fix: Only say cookies are needed when they actually are
+        yield f"{output}\n✅ Download completed.\n", 1.0
     
     # Log completion
     logger.info(f"Download completed with return code: {return_code}")
