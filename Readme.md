@@ -12,8 +12,7 @@ The developers are **NOT** responsible for:
 ## 📋 Prerequisites
 
 - **Python Version**: 3.10.6 - 3.11.9
-- **Operating System**: Windows/macOS/Linux
-- **Administrative Rights**: Required for FFmpeg installation
+- **Operating System**: Windows
 
 ## 🚀 Installation
 
@@ -24,11 +23,8 @@ git clone https://github.com/official-imvoiid/YouOwn
 # Navigate to the project directory
 cd YouOwn
 
-# Run FFmpeg installer (Windows Only - Run as Administrator)
-FFmpeg_to_path.bat
-
 # Install dependencies
-install_requirements.bat
+Install_requirements.bat
 
 # Launch the WebUI
 webui.bat
@@ -125,9 +121,7 @@ Feel free to fork and contribute to this project! All contributions are welcome.
 
 Tested and working on:
 - Windows 10/11
-- macOS 10.15+
-- Ubuntu 20.04+
-
+- 
 ## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
