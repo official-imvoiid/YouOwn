@@ -121,7 +121,7 @@ Feel free to fork and contribute to this project! All contributions are welcome.
 
 Tested and working on:
 - Windows 10/11
-- 
+
 ## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
