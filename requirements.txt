@@ -1,4 +1,6 @@
-gradio>=4.0.0
-yt-dlp>=2023.11.14
-pathlib>=1.0.1
-python-dotenv>=1.0.0
+gradio
+yt-dlp
+python-dotenv
+cloudflare
+requests
+urllib3
