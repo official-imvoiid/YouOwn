@@ -4,16 +4,8 @@ import tempfile
 import uuid
 import os
 import re
-import logging
 from pathlib import Path
 from typing import Generator, Tuple, List, Optional
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger('secure_downloader')
 
 # Constants
 DEFAULT_OUT_DIR = "Downloads"
@@ -26,6 +18,9 @@ COOKIE_WARNING = """⚠️ <span style="font-size:1.3em; font-weight:bold">EXTRE
 • We <span style="color:lime; font-weight:bold">DO NOT STORE</span> any cookie data
 • Misuse of Cookies Can result in <span style="color:Black; font-weight:bold">PERMANENT ACCOUNT BANS</span>"""
 
+DUPLICATE_WARNING = """<span style="font-size:1em; font-weight:bold">DUPLICATE DOWNLOAD WARNING❗</span> 
+This tool&nbsp;&nbsp;<span style="color:Black; font-weight:bold">WILL DOWNLOAD DUPLICATES</span>&nbsp if you feed the same link multiple times"""
+
 README_CONTENT = """# Secure Media Downloader
 
 ## Overview
@@ -36,6 +31,12 @@ This tool allows you to download media in highest possible Quality content while
 - Bulk downloads (multiple URLs)
 - Restricted content access (with cookies)
 - Cloudflare tunnel for remote access
+
+## Note
+- Tested For Yt/Insta/TikTok/Reddit/Twitter
+- Will Not Work For Broken/Unsupported Links
+- Bulk Download Skips Broken/Unsupported Links
+- Each link on a new line. No gaps (Bulk Downloader)
 
 ## How to Use
 
@@ -79,9 +80,8 @@ def clean_temp_files(uid: str) -> None:
     if os.path.exists(cookie_path):
         try:
             os.remove(cookie_path)
-            logger.info(f"Deleted temporary cookie file: {cookie_path}")
         except Exception as e:
-            logger.error(f"Failed to delete cookie file: {e}")
+            pass
 
 def validate_inputs(url: str, out_dir: str) -> Tuple[bool, str]:
     """Validate user inputs before processing."""
@@ -107,12 +107,12 @@ def download_stream(
     extra_args: str, 
     use_cookies: bool, 
     cookies_txt: str
-) -> Generator[Tuple[str, float], None, None]:
-    """Stream download progress from yt-dlp."""
+) -> Generator[Tuple[str, float, bool], None, None]:
+    """Stream download progress from yt-dlp. Returns (output, progress, success)"""
     # Input validation
     is_valid, error_msg = validate_inputs(url, out_dir)
     if not is_valid:
-        yield error_msg, 0.0
+        yield error_msg, 0.0, False
         return
 
     # Generate unique ID for this download
@@ -121,7 +121,7 @@ def download_stream(
     
     # Determine format based on user selection
     if audio_only and video_only:
-        yield "❌ Cannot select both 'Audio Only' and 'Video Only'", 0.0
+        yield "❌ Cannot select both 'Audio Only' and 'Video Only'", 0.0, False
         return
     
     fmt = ("bestaudio[ext=m4a]/bestaudio" if audio_only
@@ -143,13 +143,13 @@ def download_stream(
                 f.write(cookies_txt)
             os.chmod(cookie_path, 0o600)  # Set secure permissions
             cmd += ["--cookies", cookie_path]
-            yield "🔒 Using secure cookies (will be deleted after download)\n", 0.0
+            yield "🔒 Using secure cookies (will be deleted after download)\n", 0.0, True
         except Exception as e:
-            yield f"❌ Failed to process cookies: {e}", 0.0
+            yield f"❌ Failed to process cookies: {e}", 0.0, False
             clean_temp_files(uid)
             return
     elif use_cookies and not cookies_txt:
-        yield "❌ Cookie data required but not provided", 0.0
+        yield "❌ Cookie data required but not provided", 0.0, False
         return
     
     # Add extra arguments if provided
@@ -161,8 +161,7 @@ def download_stream(
     
     # Execute command
     try:
-        yield f"🚀 Starting download: {url}\n", 0.0
-        logger.info(f"Executing command: {' '.join(cmd)}")
+        yield f"🚀 Starting download: {url}\n", 0.0, True
         proc = subprocess.Popen(
             cmd, 
             stdout=subprocess.PIPE,
@@ -171,7 +170,7 @@ def download_stream(
             bufsize=1
         )
     except Exception as e:
-        yield f"❌ Launch failed: {e}", 0.0
+        yield f"❌ Launch failed: {e}", 0.0, False
         clean_temp_files(uid)
         return
 
@@ -186,23 +185,28 @@ def download_stream(
             
             # Format and yield the line with progress
             if prog is not None:
-                yield output, prog
+                yield output, prog, True
             else:
-                yield output, 0.0
+                yield output, 0.0, True
     
     # Wait for process to complete
     return_code = proc.wait()
     
     # Clean up temporary files and report completion
-    if cookie_path:
-        clean_temp_files(uid)
-        yield f"{output}\n✅ Download completed. Cookies securely deleted.\n", 1.0
+    if return_code == 0:
+        # Success
+        if cookie_path:
+            clean_temp_files(uid)
+            yield f"{output}\n✅ Download completed. Cookies securely deleted.\n", 1.0, True
+        else:
+            yield f"{output}\n✅ Download completed.\n", 1.0, True
     else:
-        # Fix: Only say cookies are needed when they actually are
-        yield f"{output}\n✅ Download completed.\n", 1.0
-    
-    # Log completion
-    logger.info(f"Download completed with return code: {return_code}")
+        # Failure
+        if cookie_path:
+            clean_temp_files(uid)
+            yield f"{output}\n❌ Download Failed. Cookies securely deleted.\n", 0.0, False
+        else:
+            yield f"{output}\n❌ Download Failed.\n", 0.0, False
 
 def bulk_wrapper(
     urls: str, 
@@ -213,7 +217,7 @@ def bulk_wrapper(
     use_cookies: bool, 
     cookies_txt: str
 ) -> Generator[Tuple[str, float], None, None]:
-    """Process multiple URLs from a list."""
+    """Process multiple URLs from a list with success/failure tracking."""
     if audio_only and video_only:
         yield "❌ Cannot select both 'Audio Only' and 'Video Only'", 0.0
         return
@@ -231,6 +235,10 @@ def bulk_wrapper(
     
     yield f"🔄 Processing {total_urls} URLs\n", 0.0
     
+    successful_downloads = 0
+    failed_downloads = 0
+    failed_urls = []
+    
     for i, url in enumerate(url_list, 1):
         yield f"\n[{i}/{total_urls}] Processing: {url}\n", (i-1)/total_urls
         
@@ -242,13 +250,35 @@ def bulk_wrapper(
         
         # Process output from the generator
         output = ""
-        for line, progress in download_gen:
+        download_success = False
+        for line, progress, success in download_gen:
             # Calculate overall progress
             overall_progress = ((i-1) + progress) / total_urls
             output = line
+            download_success = success
             yield f"[{i}/{total_urls}] {output}", overall_progress
+        
+        # Track success/failure
+        if download_success and "✅ Download completed" in output:
+            successful_downloads += 1
+        else:
+            failed_downloads += 1
+            failed_urls.append(url)
     
-    yield f"\n✅ All {total_urls} downloads completed!\n", 1.0
+    # Final summary
+    summary = f"\n📊 BULK DOWNLOAD SUMMARY:\n"
+    summary += f"Total URLs: {total_urls}\n"
+    summary += f"✅ Succeeded: {successful_downloads}\n"
+    summary += f"❌ Failed: {failed_downloads}\n"
+    
+    if failed_urls:
+        summary += f"\n❌ Failed URLs:\n"
+        for failed_url in failed_urls:
+            summary += f"• {failed_url}\n"
+    
+    summary += f"\n✅ Bulk download process completed!\n"
+    
+    yield summary, 1.0
 
 def generate_tunnel(port: str) -> str:
     """Generate a Cloudflare tunnel for remote access."""
@@ -258,7 +288,6 @@ def generate_tunnel(port: str) -> str:
     cmd = ["cloudflared", "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"]
     
     try:
-        logger.info(f"Starting cloudflared tunnel on port {port}")
         proc = subprocess.Popen(
             cmd, 
             stdout=subprocess.PIPE,
@@ -266,7 +295,6 @@ def generate_tunnel(port: str) -> str:
             text=True
         )
     except Exception as e:
-        logger.error(f"Failed to start cloudflared: {e}")
         return f"❌ cloudflared failed: {e}"
     
     if proc.stdout:
@@ -274,7 +302,6 @@ def generate_tunnel(port: str) -> str:
             m = re.search(r"(https://[^\s]+\.trycloudflare\.com)", line)
             if m:
                 tunnel_url = m.group(1)
-                logger.info(f"Tunnel created: {tunnel_url}")
                 return f"🔗 Tunnel URL: {tunnel_url}"
             
             # If cloudflared not found
@@ -315,6 +342,17 @@ body {
     animation: pulse 2s infinite;
     position: relative;
     overflow: hidden;
+}
+.duplicate-warning {
+    background: #555555;
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    border: 1px solid #666666;
 }
 @keyframes pulse {
     0% { box-shadow: 0 0 8px rgba(255,0,0,0.5); }
@@ -404,7 +442,7 @@ def download_stream_with_progress(
     output_text = ""
     
     # Process download and collect output
-    for text, _ in download_stream(
+    for text, _, success in download_stream(
         url, out_dir, audio_only, video_only, 
         extra_args, use_cookies, cookies_txt
     ):
@@ -436,6 +474,7 @@ def bulk_wrapper_with_progress(
 # Create the Gradio interface
 with gr.Blocks(css=css, title="Secure Media Downloader") as app:
     gr.HTML('<div class="warning-header">⚠️ <b>FOR PERSONAL USE ONLY - DO NOT USE WITH MAIN ACCOUNTS</b> ⚠️ <br><span style="font-size: 16px;">Developed By VOIID</span></div>')
+    gr.HTML(f'<div class="duplicate-warning">{DUPLICATE_WARNING}</div>')
     
     with gr.Row():
         with gr.Column(scale=4):
@@ -567,7 +606,14 @@ with gr.Blocks(css=css, title="Secure Media Downloader") as app:
 
                 # Cloudflare Tunnel Tab
                 with gr.Tab("☁️ Tunnel", id="tunnel"):
-                    gr.Markdown("Generate public URL via Cloudflare for remote access")
+                    gr.Markdown(
+                        "### Generate public URL via Cloudflare for remote access\n"
+                        "Check your port number in the CMD before proceeding.\n"
+                        "Default is usually **7860**, but if it's already occupied, or if this program is running in multiple instances,\n"
+                        "it might be **7861**, **7862**, etc.\n"
+                        "Verify the correct port in your terminal output and enter it below."
+                    )
+
                     
                     port_in = gr.Textbox(
                         label="Local Port", 
@@ -603,4 +649,4 @@ with gr.Blocks(css=css, title="Secure Media Downloader") as app:
                 outputs=readme_container
             )
 
-    app.launch(share=False)
+    app.launch(share=False, inbrowser=False, inline=False)
