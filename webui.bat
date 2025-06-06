@@ -1,33 +1,44 @@
 @echo off
 cls
 echo Starting Secure Media Downloader...
-echo.
 
-:: Start the application
-start /B python app.py
-
-:: Wait for the server to start
-echo Waiting for server to initialize...
-:wait_loop
-timeout /t 1 /nobreak >nul
-curl -s http://127.0.0.1:7860/ >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Server starting...
-    goto wait_loop
+:: Set temporary PATH for FFmpeg executables
+set "BASE_DIR=%cd%"
+set "FFMPEG_DIR=%BASE_DIR%\FFmpeg"
+set "PATH=%PATH%;%FFMPEG_DIR%"
+:: Quick check for FFmpeg executables (silent)
+for %%F in (ffmpeg.exe ffplay.exe ffprobe.exe) do (
+    if not exist "%FFMPEG_DIR%\%%F" (
+        echo ERROR: %%F not found in %FFMPEG_DIR%
+        echo Please ensure FFmpeg executables are in FFmpeg folder.
+        pause
+        exit /b 1
+    )
 )
 
-:: Extra wait time to ensure UI is fully loaded
-echo Server started! Allowing time for UI to initialize...
-timeout /t 10 /nobreak >nul
+:: Quick Python check (silent)
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ERROR: Python not found. Please install Python.
+    pause
+    exit /b 1
+)
 
-:: Open in default browser
-echo Opening in your default browser...
-start http://127.0.0.1:7860/
+:: Check if app.py exists
+if not exist "app.py" (
+    echo ERROR: app.py not found in current directory.
+    pause
+    exit /b 1
+)
 
+:: Show status message
 echo.
-echo If the browser doesn't open automatically, please navigate to:
-echo http://127.0.0.1:7860/
-echo.
-echo Press Ctrl+C to stop the server when you're done.
+echo =========================================================
+echo         Application Running Locally
+echo ---------------------------------------------------------
+echo   To stop the application: Close this window
+echo   To open in browser: Ctrl + Right-Click the URL below
+echo =========================================================
 
-:: Keep the window open
+:: Start App
+python app.py 
