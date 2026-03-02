@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ========================================================
-echo       Secure Media Downloader - Dependencies Installer
+echo       Secure Media Downloader - Installer
 echo ========================================================
 echo.
 
@@ -28,7 +28,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: Parse Python version more reliably
+:: Parse Python version
 for /f "tokens=2 delims= " %%i in (temp_version.txt) do set PYTHON_VERSION=%%i
 del temp_version.txt
 
@@ -40,7 +40,7 @@ if "!PYTHON_VERSION!"=="" (
 
 echo Detected Python !PYTHON_VERSION!
 
-:: Extract major and minor version numbers for validation
+:: Extract major and minor version numbers
 for /f "tokens=1,2 delims=." %%a in ("!PYTHON_VERSION!") do (
     set PYTHON_MAJOR=%%a
     set PYTHON_MINOR=%%b
@@ -81,26 +81,26 @@ if %errorlevel% neq 0 (
         exit /b 1
     )
     echo Pip installed successfully.
+) else (
+    echo Pip is available.
 )
 
 echo.
-echo Updating pip to latest version...
+echo Upgrading pip to latest version...
 python -m pip install --upgrade pip
 if %errorlevel% neq 0 (
-    echo WARNING: Failed to upgrade pip, but continuing with installation...
-    echo You may want to upgrade pip manually later.
+    echo WARNING: Failed to upgrade pip, continuing anyway...
 ) else (
-    echo Pip updated successfully.
+    echo Pip upgraded successfully.
 )
 
 echo.
-echo Installing required packages from requirements.txt...
-echo This may take a few minutes depending on your internet connection.
+echo Installing packages from requirements.txt...
 echo Please wait...
 echo.
 
-:: Install requirements with better error handling
-python -m pip install -r requirements.txt --upgrade
+:: Install WITHOUT --upgrade (fresh install only)
+python -m pip install -r requirements.txt
 set PIP_ERROR=%errorlevel%
 
 if %PIP_ERROR% neq 0 (
@@ -110,9 +110,6 @@ if %PIP_ERROR% neq 0 (
     echo - Your internet connection
     echo - You have necessary permissions
     echo - requirements.txt is not corrupted
-    echo.
-    echo You can try running this command manually:
-    echo python -m pip install -r requirements.txt --upgrade
     echo.
     pause
     exit /b 1
